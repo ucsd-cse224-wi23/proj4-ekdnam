@@ -14,12 +14,14 @@ import (
 )
 
 /* Hash Related */
+// return hash of a byte slice
 func GetBlockHashBytes(blockData []byte) []byte {
 	h := sha256.New()
 	h.Write(blockData)
 	return h.Sum(nil)
 }
 
+// return hash of byte slice encoded to string
 func GetBlockHashString(blockData []byte) string {
 	blockHash := GetBlockHashBytes(blockData)
 	return hex.EncodeToString(blockHash)
@@ -77,7 +79,7 @@ func WriteMetaFile(fileMetas map[string]*FileMetaData, baseDir string) error {
 	return nil
 }
 
-// CreateTable creates the table
+// create table <file>.db
 func CreateTable(outputMetaPath string) error {
 	// remove index.db file if it exists
 	// outputMetaPath := ConcatPath(baseDir, DEFAULT_META_FILENAME)

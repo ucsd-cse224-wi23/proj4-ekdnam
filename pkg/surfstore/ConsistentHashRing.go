@@ -3,6 +3,7 @@ package surfstore
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"sort"
 )
 
@@ -12,6 +13,7 @@ type ConsistentHashRing struct {
 
 func (c ConsistentHashRing) GetResponsibleServer(blockId string) string {
 	hashes := []string{}
+	log.Println(c.ServerMap)
 	for hash := range c.ServerMap {
 		hashes = append(hashes, hash)
 	}
@@ -36,8 +38,9 @@ func (c ConsistentHashRing) Hash(addr string) string {
 
 func NewConsistentHashRing(serverAddrs []string) *ConsistentHashRing {
 	consistentHashRing := new(ConsistentHashRing)
+	consistentHashRing.ServerMap = make(map[string]string)
 	for _, server := range serverAddrs {
-		serverHash := consistentHashRing.Hash(server)
+		serverHash := consistentHashRing.Hash("blockstore" + server)
 		consistentHashRing.ServerMap[serverHash] = server
 	}
 	return consistentHashRing

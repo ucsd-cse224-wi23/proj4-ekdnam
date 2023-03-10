@@ -13,14 +13,16 @@ type BlockStore struct {
 	UnimplementedBlockStoreServer
 }
 
+// Stores block b in the key-value store, indexed by hash value h
 func (bs *BlockStore) GetBlock(ctx context.Context, blockHash *BlockHash) (*Block, error) {
 	val, ok := bs.BlockMap[blockHash.Hash]
 	if !ok {
-		return &Block{BlockData: nil, BlockSize: -1}, fmt.Errorf("BlockHash not present in BlockMap")
+		return &Block{BlockData: nil, BlockSize: -1}, fmt.Errorf("BlockHash not present in Server. Please check different server")
 	}
 	return val, nil
 }
 
+// Retrieves a block indexed by hash value h
 func (bs *BlockStore) PutBlock(ctx context.Context, block *Block) (*Success, error) {
 	log.Println("In PutBlock")
 	myBlock := &Block{BlockData: block.BlockData, BlockSize: int32(len(block.BlockData))}

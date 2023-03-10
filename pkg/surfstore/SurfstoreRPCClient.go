@@ -130,8 +130,26 @@ func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersio
 	return err
 }
 
-func (surfClient *RPCClient) GetBlockStoreAddr(blockStoreAddr *string) error {
-	// connect to the serverm
+func (surfClient *RPCClient) GetBlockHashes(blockStoreAddr string, blockHashes *[]string) error {
+	conn, err := grpc.Dial(blockStoreAddr, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	c := NewBlockStoreClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	mblockHashes, err := c.GetBlockHashes(ctx, &emptypb.Empty{})
+	if err != nil {
+		return err
+	}
+	*blockHashes = mblockHashes.Hashes
+	// close the connection
+	return conn.Close()
+
+}
+
+func (surfClient *RPCClient) GetBlockStoreAddrs(blockStoreAddrs *[]string) error {
 	metaStoreAddr := surfClient.MetaStoreAddr
 	conn, err := grpc.Dial(metaStoreAddr, grpc.WithInsecure())
 	if err != nil {
@@ -139,30 +157,41 @@ func (surfClient *RPCClient) GetBlockStoreAddr(blockStoreAddr *string) error {
 	}
 	m := NewMetaStoreClient(conn)
 
-	// perform the call
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err = m.GetBlockStoreAddrs(ctx, &emptypb.Empty{})
+
+	addrs, err := m.GetBlockStoreAddrs(ctx, &emptypb.Empty{})
 	if err != nil {
-		conn.Close()
 		return err
 	}
-	// log.Println("BlockStoreAddr is123 :", blockStoreAddrObj.Addr)
-	// *blockStoreAddr = blockStoreAddrObj.Addr
-	// log.Println("Blockstoree addr pointer is: ", blockStoreAddr, *blockStoreAddr)
+	*blockStoreAddrs = addrs.BlockStoreAddrs
 	return conn.Close()
 }
 
-func (surfClient *RPCClient) GetBlockHashes(blockStoreAddr string, blockHashes *[]string) error {
-	panic("todo")
-}
-
-func (surfClient *RPCClient) GetBlockStoreAddrs(blockStoreAddrs *[]string) error {
-	panic("todo")
-}
-
+// Given a list of block hashes, find out which block server they belong to.
+// Returns a mapping from block server address to block hashes.
 func (surfClient *RPCClient) GetBlockStoreMap(blockHashesIn []string, blockStoreMap *map[string][]string) error {
-	panic("todo")
+	metaStoreAddr := surfClient.MetaStoreAddr
+	conn, err := grpc.Dial(metaStoreAddr, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	m := NewMetaStoreClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	hashesIn := new(BlockHashes)
+	hashesIn.Hashes = blockHashesIn
+	myMap, err := m.GetBlockStoreMap(ctx, hashesIn)
+	if err != nil {
+		return err
+	}
+	tempStoreMap := make(map[string][]string)
+	for k, v := range myMap.BlockStoreMap {
+		tempStoreMap[k] = v.Hashes
+	}
+	*blockStoreMap = tempStoreMap
+	return conn.Close()
 }
 
 // This line guarantees all method for RPCClient are implemented
