@@ -15,6 +15,7 @@ type BlockStore struct {
 
 // Stores block b in the key-value store, indexed by hash value h
 func (bs *BlockStore) GetBlock(ctx context.Context, blockHash *BlockHash) (*Block, error) {
+	log.Println("In BlockStore.go/GetBlock")
 	val, ok := bs.BlockMap[blockHash.Hash]
 	if !ok {
 		return &Block{BlockData: nil, BlockSize: -1}, fmt.Errorf("BlockHash not present in Server. Please check different server")
@@ -26,7 +27,7 @@ func (bs *BlockStore) GetBlock(ctx context.Context, blockHash *BlockHash) (*Bloc
 func (bs *BlockStore) PutBlock(ctx context.Context, block *Block) (*Success, error) {
 	log.Println("In PutBlock")
 	myBlock := &Block{BlockData: block.BlockData, BlockSize: int32(len(block.BlockData))}
-	log.Println("My Block created")
+	log.Println("MyBlock created")
 	bs.BlockMap[GetBlockHashString(block.BlockData)] = myBlock
 	return &Success{Flag: true}, nil
 }

@@ -26,22 +26,17 @@ func ClientSync(client RPCClient) {
 	}
 	// load index file from the db
 	prevFileMetaMap, err := LoadMetaFromMetaFile(client.BaseDir)
-
 	if err != nil {
 		log.Fatalln("Error in reading MetaFile: ", err.Error())
 	}
-	log.Println("PrevFileMetaMap")
 	PrintMetaMap(prevFileMetaMap)
-	log.Println("---")
 	// get all the entries in the base directory
 	entries, err := os.ReadDir(client.BaseDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// store a filename and the hashes of its contents
 	fileHashlistMap := make(map[string][]string)
-	// contains the current state of the files. it gets written to the database at the end of the sync
 	localMetaMap := make(map[string]*FileMetaData)
 
 	// iterate over all files
@@ -73,6 +68,7 @@ func ClientSync(client RPCClient) {
 				localMetaMap[filename] = val
 			} else {
 				log.Println("File modified:", filename)
+				log.Println("Hashes are: ")
 				log.Println("Hashed blocks:", hashList)
 				log.Println("Stored hashed blocks:", val)
 				localMetaMap[filename] = &FileMetaData{Filename: filename, Version: val.Version + 1, BlockHashList: hashList}
@@ -83,21 +79,6 @@ func ClientSync(client RPCClient) {
 		}
 	}
 
-	// download remote index
-	serverFileInfoMap := make(map[string]*FileMetaData)
-	err = client.GetFileInfoMap(&serverFileInfoMap)
-	log.Println("localMetaMap")
-	PrintMetaMap(localMetaMap)
-	log.Println("Server file info map")
-	PrintMetaMap(serverFileInfoMap)
-	if err != nil {
-		log.Println("error while downloading remote index")
-		log.Fatal(err.Error())
-	}
-
-	// deletion of file. file is present in index.db, but absent in our scanned files
-	log.Println("FileHashListMap")
-	log.Println(fileHashlistMap)
 	// deletion of file. file is present in index.db, but absent in our scanned files
 	for filename, _ := range prevFileMetaMap {
 		if _, ok := fileHashlistMap[filename]; !ok {
@@ -108,6 +89,20 @@ func ClientSync(client RPCClient) {
 		}
 	}
 
+	// PrintMetaMap(localMetaMap)
+
+	// download remote index
+	serverFileInfoMap := make(map[string]*FileMetaData)
+	err = client.GetFileInfoMap(&serverFileInfoMap)
+	log.Println("localMetaMap")
+	PrintMetaMap(localMetaMap)
+	log.Println("Server file info map")
+	PrintMetaMap(serverFileInfoMap)
+	if err != nil {
+		log.Println("HI IN ERROR BLOCK")
+		log.Fatal(err.Error())
+	}
+
 	// compare between the two maps. decide whether to download file or upload file
 
 	// first we will decide whether to download the file
@@ -115,38 +110,18 @@ func ClientSync(client RPCClient) {
 	// log.Println("Download")
 	for remoteFilename, remoteMetaData := range serverFileInfoMap {
 		if localMetaData, ok := localMetaMap[remoteFilename]; !ok { //file present on remote but not local
-			if len(remoteMetaData.BlockHashList) == 1 && remoteMetaData.BlockHashList[0] == "0" {
-				log.Println("File present on remote. But has the tombstone update. Thus, not downloading it.")
+			// file deleted on remote, and not present on local as well
+			if len(serverFileInfoMap[remoteFilename].BlockHashList) == 1 && (serverFileInfoMap[remoteFilename].BlockHashList[0] == "0") {
+				// copy over the metadata with deleted information
+				localMetaMap[remoteFilename] = &FileMetaData{}
+				localMetaMap[remoteFilename] = remoteMetaData
 				continue
 			}
-			log.Println("----")
-			log.Println("File present on remote but not local.")
-			log.Println("Downloading file: ", remoteFilename)
-			log.Println("----")
 			download(client, remoteFilename, serverFileInfoMap)
 			localMetaMap[remoteFilename] = &FileMetaData{}
 			localMetaMap[remoteFilename] = remoteMetaData
 		} else {
 			if (localMetaData.Version < remoteMetaData.Version) || (localMetaData.Version == remoteMetaData.Version && !reflect.DeepEqual(localMetaData.BlockHashList, remoteMetaData.BlockHashList)) {
-
-				if len(remoteMetaData.BlockHashList) == 1 && remoteMetaData.BlockHashList[0] == "0" {
-					log.Println("----")
-					log.Println("File present on local but not remote.\nDeleting file: ", remoteFilename)
-					log.Println("----")
-					currFilename := ConcatPath(client.BaseDir, remoteFilename)
-					log.Println("deleting file: ", currFilename)
-					err := os.Remove(currFilename)
-					if err != nil {
-						log.Fatal(err)
-					}
-					localMetaMap[remoteFilename] = &FileMetaData{}
-					localMetaMap[remoteFilename] = remoteMetaData
-					// localMetaMap[remoteFilename].Version = remoteMetaData.Version + 1
-					continue
-				}
-				log.Println("----")
-				log.Println("File present on remote with greater index than local.\nDeleting file: ", remoteFilename)
-				log.Println("----")
 				download(client, remoteFilename, serverFileInfoMap)
 				localMetaMap[remoteFilename] = &FileMetaData{}
 				localMetaMap[remoteFilename] = remoteMetaData
@@ -195,10 +170,24 @@ func download(client RPCClient, filename string, remoteMap map[string]*FileMetaD
 			hashToServerMap[hash] = server
 		}
 	}
-	// remove file
 
 	currFilename := ConcatPath(client.BaseDir, filename)
-
+	remoteMetaData := remoteMap[filename]
+	log.Println("Deleting file:", currFilename)
+	if len(remoteMetaData.BlockHashList) == 1 && remoteMetaData.BlockHashList[0] == "0" {
+		_, err := os.Stat(currFilename)
+		if os.IsNotExist(err) {
+			log.Println("File already deleted:", currFilename)
+			return
+		}
+		// currFilename := ConcatPath(client.BaseDir, c)
+		log.Println("deleting file: ", currFilename)
+		err = os.Remove(currFilename)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	_, err := os.Stat(currFilename)
 	if err == nil {
 		err = os.Remove(currFilename)
